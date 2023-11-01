@@ -33,7 +33,7 @@ const NonUserMessage = styled(MessageBase)
 `
 
 
-function MessagesList({messages}) {
+function MessagesList({messages, isTyping, botName}) {
   return (
    <Container>
     {messages.map((message,index)=>{
@@ -54,6 +54,7 @@ function MessagesList({messages}) {
            </NonUserMessageWrap>
         )
     })}
+    {isTyping && <p>{botName} is Typing...</p>}
    </Container>
   )
 }

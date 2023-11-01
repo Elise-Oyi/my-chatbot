@@ -42,6 +42,8 @@ function Chatbot() {
 
     const [messages, setMessages] = useState([])
     const [windowIsOpen, setWindowIsOpen] = useState(false)
+    const [isTyping,setIsTyping] = useState(false)
+    const [otherName, setOtherName] = useState('')
 
     //-- socket.io
     const [socket, setSocket] = useState(null)
@@ -52,16 +54,22 @@ function Chatbot() {
     const scrollToBottom = () =>{
         bottomOfMessagesRef.current?.scrollIntoView()
     }
-
     //-- scroll to the bottom
     useEffect(()=>{
         scrollToBottom()
     },[messages])
 
 
-    // --for SOCKET.IO
-    useEffect(()=>{
-      const newSocket = socketIoClient('http://127.0.0.1:8080')
+    //-- connecting to SOCKET.IO
+    useEffect(()=>{ 
+
+      const chatbotId = localStorage.getItem('chatbot-id')
+      
+      const newSocket = socketIoClient('http://127.0.0.1:8080',{
+        query: {
+          id: chatbotId,
+        }
+      })
       setSocket(newSocket)
     
 
@@ -73,15 +81,28 @@ function Chatbot() {
     },[])
 
 
+    const markMessagesAsRead = () =>{
+      socket?.emit('MARK_ALL_AS_READ')
+    }
+
     //-- to listen to the server
     useEffect(()=>{
+
+      socket?.on('ID_ASSIGNED', (newId)=>{
+        localStorage.setItem('chatbot-id', newId)
+      })
+
+      socket?.on('EXISTING_MESSAGES', (messages)=>{
+        setMessages(messages)
+        const lastBotMessage = messages.find(message => message.from)
+        setOtherName(lastBotMessage? lastBotMessage.from : 'The agent')
+
+      })
+
       //-- Listening for a message from the server
-      // ** socket.on(<variable name>, <a call back function>)
-      //** socket.emit is use to send and socket.on listens
-      //** the variable name for the on and emit for a particular event must be the same
-      //** newMessage arg represents what was sent from the socket.emit
       socket?.on('GREETING', (newMessage)=>{
         setMessages(messages.concat(newMessage))
+        setOtherName(newMessage.from)
       } )
 
       socket?.on('MESSAGE_READ', ()=>{
@@ -97,10 +118,20 @@ function Chatbot() {
         }))
       })
 
-      socket?.on('NEW_MESSAGE',(newMessage)=>{
-        setMessages(messages.concat(newMessage))
+      socket?.on('IS_TYPING', ()=>{
+        setIsTyping(true)
       })
-    },[socket,messages])
+
+      socket?.on('NEW_MESSAGE',(newMessage)=>{
+        setMessages(messages.concat({
+          ...newMessage,
+          unread: !windowIsOpen
+        }))
+        setIsTyping(false)
+        markMessagesAsRead()
+      })
+
+    },[socket,messages,windowIsOpen])
 
 
     //-- update unread messages 
@@ -112,12 +143,12 @@ function Chatbot() {
                 ...message,
                 unread: false
             })))
-
+           markMessagesAsRead()
         }
      },[windowIsOpen])
 
 
-     const unreadMessages = messages?.filter(m => m.unread)
+     const unreadMessages = messages?.filter(m => m.unread && !m.isUser)
 
      //-- a function that gets called when a new message is added
      const addNewMessage = (text) => {
@@ -140,7 +171,10 @@ function Chatbot() {
         <FloatingWindow>
             <MessagesSection>
                  <MessagesList
-                  messages={messages}/>
+                  messages={messages}
+                  botName={otherName}
+                  isTyping={isTyping}
+                  />
                  <div className="" ref={bottomOfMessagesRef}></div>
             </MessagesSection>
            
